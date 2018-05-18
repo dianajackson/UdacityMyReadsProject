@@ -2,20 +2,58 @@ import React from 'react'
 import * as BooksAPI from './BooksAPI'
 import './App.css'
 import Bookshelf from './Bookshelf'
+import Book from './Book'
 
 class BooksApp extends React.Component {
-  state = {
-    /**
-     * TODO: Instead of using this state variable to keep track of which page
-     * we're on, use the URL in the browser's address bar. This will ensure that
-     * users can use the browser's back and forward buttons to navigate between
-     * pages, as well as provide a good URL they can bookmark and share.
-     */
-    showSearchPage: false
-  }
+  	
+	state = {
+    	books: [],
+      	booksByBookshelf: {},
+        /**
+         * TODO: Instead of using this state variable to keep track of which page
+         * we're on, use the URL in the browser's address bar. This will ensure that
+         * users can use the browser's back and forward buttons to navigate between
+         * pages, as well as provide a good URL they can bookmark and share.
+         */
+        showSearchPage: false
+    }
+
+	componentDidMount() {
+		BooksAPI.getAll()
+      		.then(
+      			(books) => { this.setState(() => ({books})) }
+			)
+    }
 
   render() {
-    return (
+    	const bookshelfNames = ["Currently Reading", "Want To Read", "Read"];
+    	const bookshelvesData = {
+  			currentlyReading: 	{
+    								title: "Currently Reading",
+  									books: []
+  								},
+    		wantToRead: 		{
+              						title: "Want To Read",
+              						books: []
+            					},
+    		read: 				{
+              						title: "Read",
+              						books: []
+           						}
+  		};
+
+		this.state.books.map(book => 
+        	{	
+          		book.shelf && bookshelvesData[book.shelf].books.push(
+                	<Book key={book.id} backgroundImage={book.imageLinks.thumbnail} title={book.title} authors={book.authors}/>
+                )
+            }
+        )
+
+		const bookshelves = Object.keys(bookshelvesData).map(id => (<Bookshelf key={id} name={bookshelvesData[id].title} books={bookshelvesData[id].books}/>))
+	
+    	return (
+
       <div className="app">
         {this.state.showSearchPage ? (
           <div className="search-books">
@@ -45,9 +83,7 @@ class BooksApp extends React.Component {
             </div>
             <div className="list-books-content">
               <div>
-          		<Bookshelf name="Currently Reading"/>
-          		<Bookshelf name="Want To Read"/>
-          		<Bookshelf name="Read"/>
+          		{bookshelves}
               </div>
             </div>
             <div className="open-search">
