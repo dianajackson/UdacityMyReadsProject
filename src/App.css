@@ -172,3 +172,12 @@ body, .app {
   text-align: center;
   font-size: 0.8em;
 }
+
+/* customizations */
+.search-books .bookshelf:not(.searchResults){
+	display: none;  
+}
+
+.list-books .bookshelf.searchResults{
+	display: none;  
+}

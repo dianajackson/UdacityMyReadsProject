@@ -2,98 +2,152 @@ import React from 'react'
 import * as BooksAPI from './BooksAPI'
 import './App.css'
 import Bookshelf from './Bookshelf'
-import Book from './Book'
+import { Route } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 class BooksApp extends React.Component {
-  	
-	state = {
-    	books: [],
-      	booksByBookshelf: {},
-        /**
-         * TODO: Instead of using this state variable to keep track of which page
-         * we're on, use the URL in the browser's address bar. This will ensure that
-         * users can use the browser's back and forward buttons to navigate between
-         * pages, as well as provide a good URL they can bookmark and share.
-         */
-        showSearchPage: false
+  	constructor(props) {
+		super(props);
+      	        
+		this.state = {
+          	books: {},
+          	bookObjects: {},
+    		bookshelves: [],
+          	bookshelvesById: {},
+          	query: ''
+    	}
+      
+      	this.getBookshelf = this.getBookshelf.bind(this);
+    }
+    
+   	addBookshelfToLibrary = (bookshelf) => {
+        const bookshelves = this.state.bookshelvesById;
+
+      	if (bookshelves.hasOwnProperty(bookshelf.props.id)) {
+      		console.log("..........................this bookshelf already exists");  
+          	return false;
+        } else {
+        	bookshelves[bookshelf.props.id] = bookshelf;
+                  
+    		this.setState((currentState) => ({
+        		bookshelvesById: bookshelves
+        	})); 
+          
+          	return true;
+        }
     }
 
-	componentDidMount() {
-		BooksAPI.getAll()
-      		.then(
-      			(books) => { this.setState(() => ({books})) }
-			)
+	addBookToLibrary = (book) => {
+      	console.log("App | addBookToLibrary: " + book.shelf);
+    	const books = this.state.books;
+      	const bookObjects = this.state.bookObjects;
+         
+      	books[book.id] = book.shelf || books[book.id] || "none";
+		bookObjects[book.id] = book;
+      
+        this.setState(() => ({
+        	books: books,
+          	bookObjects: bookObjects
+        }))
+    }
+                              
+    updateLibraryBookShelf = (book) => {
+    	const books = this.state.books;
+         
+      	books[book.id] = book.shelf;
+       	console.log("changing library book shelf to: " + book.shelf);
+
+        this.setState(() => ({
+        	books: books	  
+        }))	              
+    }
+                              
+
+                              
+    getBookshelf = (bookshelfName) => {
+    	//console.log("retrieving " + bookshelfName);  
+       	return this.state.bookshelvesById[bookshelfName];
+    }
+    
+    getBookShelf = (id) => {
+    	return this.state.books[id];  
     }
 
-  render() {
-    	const bookshelfNames = ["Currently Reading", "Want To Read", "Read"];
-    	const bookshelvesData = {
-  			currentlyReading: 	{
-    								title: "Currently Reading",
-  									books: []
-  								},
-    		wantToRead: 		{
-              						title: "Want To Read",
-              						books: []
-            					},
-    		read: 				{
-              						title: "Read",
-              						books: []
-           						}
-  		};
+    displaySearchResults = (query) => {
+      	const bookshelf = this.getBookshelf("searchResults");
+      	//bookshelf.removeAllBooks();
+      
+      	BooksAPI.search(query).then(
+        	(books) => {
+                bookshelf.removeAllBooks();
 
-		this.state.books.map(book => 
-        	{	
-          		book.shelf && bookshelvesData[book.shelf].books.push(
-                	<Book key={book.id} backgroundImage={book.imageLinks.thumbnail} title={book.title} authors={book.authors}/>
-                )
-            }
+          		if (books.length) {
+                  	console.log(books);
+                  	books.forEach((book) => {
+                    	bookshelf.addBook(book, true);
+                    })
+                }
+          	}
         )
+    }
 
-		const bookshelves = Object.keys(bookshelvesData).map(id => (<Bookshelf key={id} name={bookshelvesData[id].title} books={bookshelvesData[id].books}/>))
-	
+	componentDidMount() {    
+      console.log("APP mounted");
+      const bookshelves = {
+  			currentlyReading: 	"Currently Reading",
+    		wantToRead: 		"Want To Read",
+    		read: 				"Read",
+       		searchResults:		"Search Results"
+  		};
+      
+		BooksAPI.getAll().then(
+      		(books) => { 
+          		console.log(books);
+
+              	books.forEach((book) => {
+                	this.addBookToLibrary(book)
+                });
+              
+              	this.setState(() => ({
+      				bookshelves: Object.keys(bookshelves).map(id => (<Bookshelf key={id} id={id} name={bookshelves[id]} books={books} library={this}/>))
+    			}));
+			},
+		)
+    }
+    
+  	render() {
     	return (
+      		<div className="app">
+        		<Route exact path='/' render={() => (
+                    <div className="list-books">
+                    	<div className="list-books-title">
+                    		<h1>MyReads</h1>
+                    	</div>
 
-      <div className="app">
-        {this.state.showSearchPage ? (
-          <div className="search-books">
-            <div className="search-books-bar">
-              <a className="close-search" onClick={() => this.setState({ showSearchPage: false })}>Close</a>
-              <div className="search-books-input-wrapper">
-                {/*
-                  NOTES: The search from BooksAPI is limited to a particular set of search terms.
-                  You can find these search terms here:
-                  https://github.com/udacity/reactnd-project-myreads-starter/blob/master/SEARCH_TERMS.md
+                    	<div className="list-books-content">
+                    		<div>{this.state.bookshelves.slice(0,3)}</div>
+                    	</div>
+                    	<div className="open-search">
+                    		<Link to='/search'>Add a book</Link>
+                        </div>
+                   	</div>
+            	)} />
+          
+        		<Route exact path='/search' render={({ history }) => (
+                	<div className="search-books">
+            			<div className="search-books-bar">
+              				<Link to='/' className="close-search" >Close</Link>
+              				<div className="search-books-input-wrapper">
+                				<input type="text" placeholder="Search by title or author" onChange={(e) => this.displaySearchResults(e.target.value)}/>
+              				</div>
+            			</div>
 
-                  However, remember that the BooksAPI.search method DOES search by title or author. So, don't worry if
-                  you don't find a specific author or title. Every search is limited by search terms.
-                */}
-                <input type="text" placeholder="Search by title or author"/>
-
-              </div>
-            </div>
-            <div className="search-books-results">
-              <ol className="books-grid"></ol>
-            </div>
-          </div>
-        ) : (
-          <div className="list-books">
-            <div className="list-books-title">
-              <h1>MyReads</h1>
-            </div>
-            <div className="list-books-content">
-              <div>
-          		{bookshelves}
-              </div>
-            </div>
-            <div className="open-search">
-              <a onClick={() => this.setState({ showSearchPage: true })}>Add a book</a>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
+            			<div className="search-books-results">{this.state.bookshelves.slice(this.state.bookshelves.length-1)}</div>
+          			</div>
+        		)} />          
+      		</div>
+    	)
+  	}
 }
 
 export default BooksApp
