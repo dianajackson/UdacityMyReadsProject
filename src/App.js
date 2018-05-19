@@ -4,6 +4,7 @@ import './App.css'
 import Bookshelf from './Bookshelf'
 import { Route } from 'react-router-dom'
 import { Link } from 'react-router-dom'
+import ContextMenu from './ContextMenu';
 
 class BooksApp extends React.Component {
   	constructor(props) {
@@ -11,111 +12,156 @@ class BooksApp extends React.Component {
       	        
 		this.state = {
           	books: {},
-          	bookObjects: {},
-    		bookshelves: [],
-          	bookshelvesById: {},
+          	bookshelves: {
+            	currentlyReading: 	{name: "Currently Reading", books: []},
+    			wantToRead: 		{name: "Want To Read", books: []},
+    			read: 				{name: "Read", books: []},
+       			searchResults:		{name: "Search Results", books: []}
+            },
+          	contextMenus: {},
           	query: ''
     	}
       
-      	this.getBookshelf = this.getBookshelf.bind(this);
-    }
-    
-   	addBookshelfToLibrary = (bookshelf) => {
-        const bookshelves = this.state.bookshelvesById;
-
-      	if (bookshelves.hasOwnProperty(bookshelf.props.id)) {
-      		console.log("..........................this bookshelf already exists");  
-          	return false;
-        } else {
-        	bookshelves[bookshelf.props.id] = bookshelf;
-                  
-    		this.setState((currentState) => ({
-        		bookshelvesById: bookshelves
-        	})); 
-          
-          	return true;
-        }
-    }
-
-	addBookToLibrary = (book) => {
-      	console.log("App | addBookToLibrary: " + book.shelf);
-    	const books = this.state.books;
-      	const bookObjects = this.state.bookObjects;
-         
-      	books[book.id] = book.shelf || books[book.id] || "none";
-		bookObjects[book.id] = book;
-      
-        this.setState(() => ({
-        	books: books,
-          	bookObjects: bookObjects
-        }))
-    }
-                              
-    updateLibraryBookShelf = (book) => {
-    	const books = this.state.books;
-         
-      	books[book.id] = book.shelf;
-       	console.log("changing library book shelf to: " + book.shelf);
-
-        this.setState(() => ({
-        	books: books	  
-        }))	              
-    }
-                              
-
-                              
-    getBookshelf = (bookshelfName) => {
-    	//console.log("retrieving " + bookshelfName);  
-       	return this.state.bookshelvesById[bookshelfName];
-    }
-    
-    getBookShelf = (id) => {
-    	return this.state.books[id];  
+      	this.updateBookShelf = this.updateBookShelf.bind(this);
+      	//this.updateBookShelfFromSearch = this.updateBookShelfFromSearch.bind(this);
     }
 
     displaySearchResults = (query) => {
-      	const bookshelf = this.getBookshelf("searchResults");
-      	//bookshelf.removeAllBooks();
+      	const currentBooks = this.state.books;
+      	const bookshelves = this.state.bookshelves;
+      	const contextMenus = this.state.contextMenus;
+      
+      	this.setState(() => ({query: query}));
+      
+      	if (!query) {
+          	bookshelves["searchResults"].books = [];
+          
+          	this.setState((currentState) => ({
+            	books: [],
+            	bookshelves: bookshelves
+          	}));
+          
+        	return;  
+        }
       
       	BooksAPI.search(query).then(
-        	(books) => {
-                bookshelf.removeAllBooks();
-
-          		if (books.length) {
-                  	console.log(books);
-                  	books.forEach((book) => {
-                    	bookshelf.addBook(book, true);
-                    })
+        	(filteredBooks) => {
+          		if (filteredBooks.length) {                  
+                  	filteredBooks.forEach((book) => {
+                      	const bookId = book.id;
+                      	//console.log(Object.keys(currentBooks));
+                      	//console.log(book.id + (currentBooks.hasOwnProperty(book.id) ? " is in the list" : " is not in the list"));
+                      
+                    	if (!currentBooks.hasOwnProperty(book.id)) {
+                       		currentBooks[bookId] = book;
+                          	contextMenus[bookId] = <ContextMenu 
+      									key={"contextMenu_" + bookId} 
+										bookId={bookId} 
+										bookshelfKey="none"
+										updateBookShelf={this.updateBookShelf}
+								   />;
+                        } else {
+                        	// Grab the current shelf for existing books
+                          	console.log("... ...Grabbing " + currentBooks[bookId].shelf + " for existing book " + book.title);
+                          	book.shelf = currentBooks[bookId].shelf;
+                        }
+                    });
                 }
+              
+              	bookshelves["searchResults"].books = filteredBooks;
+              
+              	this.setState((currentState) => ({
+					books: currentBooks,
+              		bookshelves: bookshelves,
+              		contextMenus: contextMenus
+            	}));
           	}
         )
     }
 
+	updateBookShelf = (bookId, newShelf) => {
+      	const books = this.state.books;
+      	const contextMenus = this.state.contextMenus;
+      	const currentBookshelves = this.state.bookshelves;
+      
+    	console.log("... ... User clicked " + newShelf); 
+      
+      	BooksAPI.update({id: bookId}, newShelf).then((bookshelves) => {
+        	console.log("... ...DB Updated " + this.props.id + " " + newShelf);
+          
+          	books[bookId].shelf = newShelf;
+          	contextMenus[bookId] = <ContextMenu 
+      									key={"contextMenu_" + bookId} 
+										bookId={bookId} 
+										bookshelfKey={newShelf}
+										updateBookShelf={this.updateBookShelf}
+								   />;
+            
+           	Object.keys(bookshelves).forEach((bookshelfKey) => {
+            	const books = [];
+              	bookshelves[bookshelfKey].forEach((bookId) => {
+                	books.push(this.state.books[bookId]);	
+                });
+              
+              	currentBookshelves[bookshelfKey].books = books;
+            });
+
+            this.setState((currentState) => ({
+				books: books,
+              	bookshelves: currentBookshelves,
+              	contextMenus: contextMenus
+            }));
+                          
+            console.log(books[bookId].title + " is now on Shelf " + this.state.books[bookId].shelf);
+        });                      
+    }
+
+	updateBookShelfFromSearch = (bookId, newShelf) => {
+      	this.updateBookShelf(bookId, newShelf, true);                   
+    }
+
 	componentDidMount() {    
-      console.log("APP mounted");
-      const bookshelves = {
-  			currentlyReading: 	"Currently Reading",
-    		wantToRead: 		"Want To Read",
-    		read: 				"Read",
-       		searchResults:		"Search Results"
-  		};
+    	console.log("APP mounted");
+      
+      	const booksList = this.state.books;
+      	const bookshelves = this.state.bookshelves;
+      	const contextMenus = this.state.contextMenus;
       
 		BooksAPI.getAll().then(
       		(books) => { 
-          		console.log(books);
-
               	books.forEach((book) => {
-                	this.addBookToLibrary(book)
+                	booksList[book.id] = book;
+                	book.shelf && bookshelves[book.shelf].books.push(book);
+      				contextMenus[book.id] = <ContextMenu 
+      											key={"contextMenu_" + book.id} 
+												bookId={book.id} 
+												bookshelfKey={book.shelf || "none"}
+												updateBookShelf={this.updateBookShelf}
+											/>;
                 });
               
               	this.setState(() => ({
-      				bookshelves: Object.keys(bookshelves).map(id => (<Bookshelf key={id} id={id} name={bookshelves[id]} books={books} library={this}/>))
+                	books: booksList,
+                  	bookshelve: bookshelves,
+                  	contextMenus: contextMenus
     			}));
 			},
 		)
     }
     
   	render() {
+      	const allBookshelves = this.state.bookshelves;
+      	const contextMenus = this.state.contextMenus;
+      	const searchResultsBookshelfData = allBookshelves["searchResults"];
+      	const searchResultsBookshelf = <Bookshelf name="Search Results" books={searchResultsBookshelfData.books} contextMenus={contextMenus}/>
+		const generalBookshelves = [];
+
+		Object.keys(allBookshelves).filter((bookshelfKey) => {return bookshelfKey !== "searchResults"})
+			.forEach(bookshelfKey => {
+              	const bookshelfData = allBookshelves[bookshelfKey];
+            	generalBookshelves.push(<Bookshelf key={bookshelfKey} name={bookshelfData.name} books={bookshelfData.books} contextMenus={contextMenus}/>);
+         	});
+
     	return (
       		<div className="app">
         		<Route exact path='/' render={() => (
@@ -125,7 +171,7 @@ class BooksApp extends React.Component {
                     	</div>
 
                     	<div className="list-books-content">
-                    		<div>{this.state.bookshelves.slice(0,3)}</div>
+                    		<div>{generalBookshelves}</div>
                     	</div>
                     	<div className="open-search">
                     		<Link to='/search'>Add a book</Link>
@@ -138,11 +184,13 @@ class BooksApp extends React.Component {
             			<div className="search-books-bar">
               				<Link to='/' className="close-search" >Close</Link>
               				<div className="search-books-input-wrapper">
-                				<input type="text" placeholder="Search by title or author" onChange={(e) => this.displaySearchResults(e.target.value)}/>
+                				<input type="text" placeholder="Search by title or author" value={this.state.query} onChange={(e) => this.displaySearchResults(e.target.value)}/>
               				</div>
             			</div>
 
-            			<div className="search-books-results">{this.state.bookshelves.slice(this.state.bookshelves.length-1)}</div>
+            			<div className="search-books-results">
+							{searchResultsBookshelf}
+						</div>
           			</div>
         		)} />          
       		</div>
